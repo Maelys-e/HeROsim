@@ -1,0 +1,29 @@
+{
+  "f1": {
+    "name": "f1",
+    "platforms": [
+      "cpu"
+    ],
+    "memoryRequirements": {
+      "cpu": 1.0
+    },
+    "coldStartDuration": {
+      "cpu": 2.0
+    },
+    "executionTime": {
+      "cpu": 1.0
+    },
+    "energy": {
+      "cpu": 1.0
+    },
+    "imageSize": {
+      "cpu": 1.0
+    },
+    "stateSize": {
+      "a1": {
+        "input": 0,
+        "output": 0
+      }
+    }
+  }
+}

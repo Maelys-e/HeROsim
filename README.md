@@ -30,7 +30,7 @@ The user chooses their desired orchestration policy for the run and execute the 
 The simulation advances when functions are invoked: it is a called a **task execution**. The simulator knows how long a function's response time is thanks to the metadata measured beforehand. These metadata concern the specific hardware and workloads the user is interested in scheduling. Details on the methodology we used to characterize various platforms and workloads can be found in our papers:
 
 * V. Lannurien et al., ["HeROfake: Heterogeneous Resources Orchestration in a Serverless Cloud – An Application to Deepfake Detection"](https://hal.science/hal-04165179), 2023 IEEE/ACM 23rd International Symposium on Cluster, Cloud and Internet Computing (CCGrid), Bangalore, India, 2023, pp. 154-165, doi: 10.1109/CCGrid57682.2023.00024.
-* V. Lannurien et al., "HeROcache: Storage-Aware Scheduling in Heterogeneous Serverless Edge -- The Case of IDS" (CCGrid 2024, accepted).
+* V. Lannurien et al., "HeROcache: Storage-Aware Scheduling in Heterogeneous Serverless Edge – The Case of IDS" (CCGrid 2024, accepted).
 
 During the simulation, logs are written under the `log` directory. When all the user requests have been processed, the simulation stops and returns results summarizing the simulation run in the `result` directory.
 
@@ -148,4 +148,4 @@ The implementation overhead is minimal: the simplest couple of autoscaler and sc
 
 ## License
 
-HeROsim is released under the Apache License, Version 2.0. Feel free to modify, distribute, and use the software in accordance with the terms of the license. Contributions to the project are also welcome.
+HeROsim is released under the MIT License. Feel free to modify, distribute, and use the software in accordance with the terms of the license. Contributions to the project are also welcome.

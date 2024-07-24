@@ -1,19 +1,3 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -21,6 +5,8 @@ import math
 
 from typing import Dict, Generator, Set, Tuple, TYPE_CHECKING
 
+from src.placement.by_threshold.autoscaler import ThresholdAutoscaler
+from src.placement.infrastructure import Node, Platform
 from src.policy.herofake.model import HROSchedulerState, HROSystemState
 
 if TYPE_CHECKING:
@@ -35,10 +21,8 @@ from src.placement.model import (
     TaskType,
 )
 
-from src.placement.autoscaler import Autoscaler
 
-
-class HROAutoscaler(Autoscaler):
+class HROAutoscaler(ThresholdAutoscaler):
     def scaling_level(
         self, system_state: HROSystemState, task_type: TaskType
     ) -> Generator:
@@ -74,7 +58,8 @@ class HROAutoscaler(Autoscaler):
                 / target_concurrencies.get(
                     hardware_short_name, self.policy.queue_length
                 )
-            ) - len(hardware_replicas[hardware_short_name])
+            )
+            - len(hardware_replicas[hardware_short_name])
             for hardware_short_name in set(target_concurrencies)
             | set(in_system_concurrencies)
         }
@@ -216,13 +201,11 @@ class HROAutoscaler(Autoscaler):
 
         return selected
 
-    def initialize_replica(
+    def is_cached(
         self,
         new_replica: Tuple[Node, Platform],
-        function_replicas: Set[Tuple[Node, Platform]],
         task_type: TaskType,
-        system_state: HROSystemState,
-    ) -> Generator:
+    ) -> bool:
         node: Node = new_replica[0]
         platform: Platform = new_replica[1]
 
@@ -232,47 +215,20 @@ class HROAutoscaler(Autoscaler):
             and platform.previous_task.type["name"] == task_type["name"]
         )
 
-        # Initialize image retrieval duration
-        retrieval_duration: DurationSecond = 0.0
+        return warm_function
 
-        # Retrieve image if function not in RAM cache
-        if not warm_function:
-            logging.info(
-                f"[ {self.env.now} ] 💾 {node} needs to pull image for {task_type}"
-            )
+    def initialize_replica(
+        self,
+        new_replica: Tuple[Node, Platform],
+        task_type: TaskType,
+        system_state: HROSystemState,
+    ) -> Generator:
+        node: Node = new_replica[0]
+        platform: Platform = new_replica[1]
 
-            # Update image retrieval duration
-            retrieval_size: SizeGigabyte = task_type["imageSize"][
-                platform.type["shortName"]
-            ]
-            # Depends on storage performance
-            # FIXME: What's the policy for storage selection?
-            node_storage = yield node.storage.get(
-                lambda storage: not storage.type["remote"]
-            )
-            # Depends on network link speed
-            retrieval_speed: SpeedMBps = min(
-                node_storage.type["throughput"]["write"], node.network["bandwidth"]
-            )
-            retrieval_duration += (
-                retrieval_size / (retrieval_speed / 1024)
-                + node_storage.type["latency"]["write"]
-            )
-
-            # print(f"retrieval size = {retrieval_size}")
-            # print(f"retrieval speed = {retrieval_speed}")
-
-            # Update disk usage
-            stored = node_storage.store_function(platform.type["shortName"], task_type)
-
-            if not stored:
-                logging.error(
-                    f"[ {self.env.now} ] 💾 {node_storage} has no available capacity to"
-                    f" cache image for {self}"
-                )
-
-            # Release storage
-            yield node.storage.put(node_storage)
+        retrieval_duration: DurationSecond = yield self.env.process(
+            self.retrieve_function(new_replica, task_type, system_state)
+        )
 
         # print(f"retrieval duration = {retrieval_duration}")
 
@@ -300,6 +256,7 @@ class HROAutoscaler(Autoscaler):
             # Set platform to ready state
             yield platform.initialized.succeed()
         except RuntimeError:
+            """
             logging.error(
                 f"[ {self.env.now} ] Autoscaler tried to initialize "
                 f"{new_replica[1]} ({new_replica[0]}) but it was already initialized."
@@ -311,6 +268,8 @@ class HROAutoscaler(Autoscaler):
                 " -- Last removal time: "
                 f"{new_replica[1].last_removed}"
             )
+            """
+            pass
 
         # Statistics (Node)
         node.cache_hits += 0

@@ -1,0 +1,31 @@
+{
+  "network": {
+    "bandwidth": 100
+  },
+  "nodes": [
+    {
+      "memory": 64,
+      "platforms": [
+        "xavierDla",
+        "xavierDla"
+      ],
+      "storage": [
+        "flashCard",
+        "someRemote"
+      ]
+    },
+    {
+      "memory": 64,
+      "platforms": [
+        "pynqFpga",
+        "xavierCpu",
+        "xavierDla",
+        "xavierDla"
+      ],
+      "storage": [
+        "flashCard",
+        "someRemote"
+      ]
+    }
+  ]
+}

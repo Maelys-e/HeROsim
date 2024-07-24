@@ -1,19 +1,3 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 from __future__ import annotations
 
 import json
@@ -37,10 +21,10 @@ from src.placement.model import (
     TimeSeries,
 )
 
-from src.placement.orchestrator import Orchestrator
+from src.placement.orchestrator import BaseOrchestrator
 
-from src.placement.autoscaler import Autoscaler
-from src.placement.scheduler import Scheduler
+from src.placement.autoscaler import BaseAutoscaler
+from src.placement.scheduler import BaseScheduler
 
 from src.policy.herofake.orchestrator import HROOrchestrator
 from src.policy.herofake.autoscaler import HROAutoscaler
@@ -53,6 +37,14 @@ from src.policy.herocache.scheduler import HRCScheduler
 from src.policy.knative.orchestrator import KnativeOrchestrator
 from src.policy.knative.autoscaler import KnativeAutoscaler
 from src.policy.knative.scheduler import KnativeScheduler
+
+from src.policy.qlearning.autoscaler import QLearningAutoscaler
+from src.policy.qlearning.orchestrator import QLearningOrchestrator
+from src.policy.qlearning.scheduler import QLearningScheduler
+
+from src.policy.simple.orchestrator import SimpleOrchestrator
+from src.policy.simple.autoscaler import SimpleAutoscaler
+from src.policy.simple.scheduler import SimpleScheduler
 
 from src.policy.random.scheduler import RandomScheduler
 
@@ -153,7 +145,7 @@ def start_simulation(
 
     # TODO: Could be discovered at runtime
     policies: Dict[
-        str, Tuple[Type[Orchestrator], Type[Autoscaler], Type[Scheduler]]
+        str, Tuple[Type[BaseOrchestrator], Type[BaseAutoscaler], Type[BaseScheduler]]
     ] = {
         "hro_hro": (HROOrchestrator, HROAutoscaler, HROScheduler),
         "hro_hrc": (HROOrchestrator, HROAutoscaler, HRCScheduler),
@@ -170,6 +162,8 @@ def start_simulation(
         "kn_hrc": (KnativeOrchestrator, KnativeAutoscaler, HRCScheduler),
         "kn_rp": (KnativeOrchestrator, KnativeAutoscaler, RandomScheduler),
         "kn_bpff": (KnativeOrchestrator, KnativeAutoscaler, BPFFScheduler),
+        "ql_ql": (QLearningOrchestrator, QLearningAutoscaler, QLearningScheduler),
+        "simple_simple": (SimpleOrchestrator, SimpleAutoscaler, SimpleScheduler),
     }
 
     # Retrieve relevant Autoscaler and Scheduler classes
@@ -189,6 +183,7 @@ def start_simulation(
         end_event=finished,
     )
 
+    # TODO: Option to loop on multiple runs (e.g. Q-Learning loop)
     env.run(until=finished)
 
     logging.info(f"[ {orchestrator.end_time} ] ✨ Simulation finished")

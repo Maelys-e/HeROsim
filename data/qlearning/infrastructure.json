@@ -1,0 +1,25 @@
+{
+  "network": {
+    "bandwidth": 100
+  },
+  "nodes": [
+    {
+      "memory": 8,
+      "platforms": [
+        "cpu", "cpu", "cpu", "cpu"
+      ],
+      "storage": [
+        "eMMC", "someRemote"
+      ]
+    },
+    {
+      "memory": 8,
+      "platforms": [
+        "cpu", "cpu", "cpu", "cpu"
+      ],
+      "storage": [
+        "eMMC", "someRemote"
+      ]
+    }
+  ]
+}

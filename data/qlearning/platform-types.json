@@ -1,0 +1,9 @@
+{
+  "cpu": {
+    "shortName": "cpu",
+    "name": "CPU",
+    "hardware": "cpu",
+    "price": 100,
+    "idleEnergy": 0.01
+  }
+}

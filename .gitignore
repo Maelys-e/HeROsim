@@ -168,6 +168,9 @@ cython_debug/
 /result
 /tmp
 
+# Azure input data
+/data/azure
+
 # Workload traces
 /data/*/traces/*
 !/data/ids/traces/workload-83-600.json

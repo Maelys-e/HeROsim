@@ -1,19 +1,3 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -87,6 +71,7 @@ def positive_int(x):
     return x
 
 
+# TODO: Make generic
 def normalize(vector: PlatformVector, t_min: int, t_max: int) -> PlatformVector:
     # https://stats.stackexchange.com/a/281164
     # https://stats.stackexchange.com/a/178629
@@ -97,9 +82,8 @@ def normalize(vector: PlatformVector, t_min: int, t_max: int) -> PlatformVector:
         denominator = 1
 
     return {
-        platform: ((value - min(vector.values())) / denominator) * (
-            t_max - t_min
-        ) + t_min
+        platform: ((value - min(vector.values())) / denominator) * (t_max - t_min)
+        + t_min
         for platform, value in vector.items()
     }
 
@@ -151,11 +135,11 @@ class QoSType(TypedDict):
 class TaskType(TypedDict):
     name: str
     platforms: List[str]
-    memoryRequirements: PlatformVector
-    coldStartDuration: PlatformVector
-    executionTime: PlatformVector
-    energy: PlatformVector
-    imageSize: PlatformVector
+    memoryRequirements: PlatformVector[SizeGigabyte]
+    coldStartDuration: PlatformVector[DurationSecond]
+    executionTime: PlatformVector[DurationSecond]
+    energy: PlatformVector[EnergykWh]
+    imageSize: PlatformVector[SizeGigabyte]
     stateSize: Dict[str, IOVector]
 
 
@@ -204,9 +188,9 @@ class PlatformResult(TypedDict):
 class NodeResult(TypedDict):
     nodeId: int
     unused: bool
-    energy: PlatformVector
-    energyIdle: PlatformVector
-    idleTime: PlatformVector
+    energy: PlatformVector[EnergykWh]
+    energyIdle: PlatformVector[EnergykWh]
+    idleTime: PlatformVector[DurationSecond]
     schedulingTime: DurationSecond
     storageTime: DurationSecond
     localDependencies: int
@@ -320,14 +304,23 @@ class SimulationData:
 
 @dataclass
 class SchedulerState:
-    target_concurrencies: Dict[str, PlatformVector]
+    pass
+    # target_concurrencies: Dict[str, PlatformVector[float]]
+
+
+@dataclass
+class ThresholdSchedulerState(SchedulerState):
+    target_concurrencies: Dict[str, PlatformVector[float]]
+
+
+# FIXME: ThresholdSystemState needed
 
 
 @dataclass
 class SystemState:
     scheduler_state: SchedulerState
-    available_resources: Dict["Node", Set["Platform"]]
-    replicas: Dict[str, Set[Tuple["Node", "Platform"]]]
+    available_resources: Dict[Node, Set[Platform]]
+    replicas: Dict[str, Set[Tuple[Node, Platform]]]
 
 
 @final
@@ -404,6 +397,15 @@ class ChartsData:
     means: ChartsMeans
 
 
+@final
+class AzureTask(TypedDict):
+    app: str
+    func: str
+    start_timestamp: MomentSecond
+    end_timestamp: MomentSecond
+    duration: DurationSecond
+
+
 class DataclassJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if dataclasses.is_dataclass(o):
@@ -440,6 +442,8 @@ scheduling_strategies: Dict[str, str] = {
     "kn_hrc": "KN-HRC",
     "kn_rp": "KN-RP",
     "kn_bpff": "KN-BPFF",
+    "ql_ql": "QL-QL",
+    "simple_simple": "Simple",
 }
 
 cache_policies: Set[str] = {

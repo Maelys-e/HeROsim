@@ -1,23 +1,7 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 import logging
 import math
 
-from typing import TYPE_CHECKING, Dict, Set, Tuple
+from typing import TYPE_CHECKING, Dict, Generator, Set, Tuple
 
 from src.placement.model import PlatformVector, normalize
 from src.policy.herocache.model import HRCSchedulerState, HRCSystemState
@@ -25,10 +9,10 @@ from src.policy.herocache.model import HRCSchedulerState, HRCSystemState
 if TYPE_CHECKING:
     from src.placement.infrastructure import Node, Platform
 
-from src.placement.orchestrator import Orchestrator
+from src.placement.by_threshold.orchestrator import ThresholdOrchestrator
 
 
-class HRCOrchestrator(Orchestrator):
+class HRCOrchestrator(ThresholdOrchestrator):
     def initialize_state(self) -> HRCSystemState:
         # Initialize scheduler state
         scheduler_state = HRCSchedulerState(
@@ -173,7 +157,7 @@ class HRCOrchestrator(Orchestrator):
 
         return system_state
 
-    def monitor_process(self):
+    def monitor_process(self) -> Generator:
         logging.info(f"[ {self.env.now} ] Orchestrator Monitor started")
 
         # Initialize time-window average
@@ -183,7 +167,7 @@ class HRCOrchestrator(Orchestrator):
             # Step
             step = math.floor(self.env.now - latest_window_start) + 1
 
-            system_state: HRCSystemState = yield self.mutex.get()
+            system_state: HRCSystemState = self.state
             replicas: Dict[str, Set[Tuple[Node, Platform]]] = system_state.replicas
             state: HRCSchedulerState = system_state.scheduler_state
 
@@ -196,9 +180,9 @@ class HRCOrchestrator(Orchestrator):
                         platform: 0.0
                         for platform in self.data.task_types[function_name]["platforms"]
                     }
-                    state.average_hardware_contention[function_name] = (
-                        initial_contention
-                    )
+                    state.average_hardware_contention[
+                        function_name
+                    ] = initial_contention
                     # Accumulators
                     for node, platform in function_replicas:
                         # HRC policy
@@ -260,8 +244,6 @@ class HRCOrchestrator(Orchestrator):
                         ] = hardware_value
 
                     # logging.error(f"[ {self.env.now} ] {function_name}: {avg_acc}")
-
-            yield self.mutex.put(system_state)
 
             # Wake Monitor up once per second
             yield self.env.timeout(1)

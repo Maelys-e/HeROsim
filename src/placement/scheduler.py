@@ -1,19 +1,3 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 from __future__ import annotations
 from abc import abstractmethod
 
@@ -28,24 +12,24 @@ from typing import Dict, Generator, Set, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.placement.infrastructure import Node, Platform, Task
-    from src.placement.autoscaler import Autoscaler
+    from src.placement.autoscaler import BaseAutoscaler
 
 from src.placement.model import SimulationData, SimulationPolicy, SystemState
 from src.placement.resources import PriorityFilterStore
 
 
-class Scheduler:
+class BaseScheduler:
     def __init__(
         self,
         env: Environment,
-        mutex: Store,
+        system_state: SystemState,
         data: SimulationData,
         policy: SimulationPolicy,
-        autoscaler: Autoscaler,
+        autoscaler: BaseAutoscaler,
         nodes: FilterStore,
     ):
         self.env = env
-        self.mutex = mutex
+        self.state = system_state
         self.data = data
         self.policy = policy
         self.autoscaler = autoscaler
@@ -55,7 +39,7 @@ class Scheduler:
         self.nodes = nodes
         self.tasks = PriorityFilterStore(env)
 
-    def scheduler_process(self):
+    def scheduler_process(self) -> Generator:
         logging.info(
             f"[ {self.env.now} ] Orchestrator Scheduler started with policy"
             f" {self.policy}"
@@ -76,7 +60,7 @@ class Scheduler:
             logging.info(f"[ {self.env.now} ] Scheduler woken up")
 
             # Get available replicas
-            system_state: SystemState = yield self.mutex.get()
+            system_state: SystemState = self.state
             replicas: Dict[str, Set[Tuple[Node, Platform]]] = system_state.replicas
             task_replicas = replicas[task.type["name"]]
 
@@ -102,10 +86,9 @@ class Scheduler:
                 # logging.error( ... )
 
                 # Next event
+                # FIXME: Jumps to next task timestamp!
+                # FIXME: We lose a bit of time...
                 self.env.step()
-
-                # Release mutex
-                yield self.mutex.put(system_state)
 
                 # Next step
                 continue
@@ -127,8 +110,6 @@ class Scheduler:
                 lambda platform: platform.id == sched_platform.id
             )
             task.platform = platform
-            # Update state
-            yield self.mutex.put(system_state)
 
             # End wall-clock time measurement
             end = default_timer()

@@ -1,19 +1,3 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 from __future__ import annotations
 from abc import abstractmethod
 
@@ -29,8 +13,8 @@ from simpy.resources.store import Store, FilterStore
 from typing import Dict, Generator, List, Tuple, Type
 
 from src.placement.infrastructure import Application, Task
-from src.placement.autoscaler import Autoscaler
-from src.placement.scheduler import Scheduler
+from src.placement.autoscaler import BaseAutoscaler
+from src.placement.scheduler import BaseScheduler
 
 from src.placement.model import (
     ApplicationResult,
@@ -47,33 +31,32 @@ from src.placement.model import (
 )
 
 
-class Orchestrator:
+class BaseOrchestrator:
     def __init__(
         self,
         env: Environment,
         data: SimulationData,
         policy: SimulationPolicy,
-        autoscaler: Type[Autoscaler],
-        scheduler: Type[Scheduler],
+        autoscaler: Type[BaseAutoscaler],
+        scheduler: Type[BaseScheduler],
         time_series: TimeSeries,
         nodes: FilterStore,
         end_event: Event,
     ):
         self.env = env
-        self.mutex = Store(env, capacity=1)
         self.data = data
         self.policy = policy
 
         self.time_series = time_series
         self.nodes = nodes
 
+        self.state: SystemState
         self.gateway: Process
         self.monitor: Process
-        self.autoscaler = autoscaler(self.env, self.mutex, self.data, self.policy)
-        self.scheduler = scheduler(
-            self.env, self.mutex, self.data, self.policy, self.autoscaler, self.nodes
-        )
-        self.initializer = env.process(self.initializer_process())
+        self.autoscaler: BaseAutoscaler
+        self.scheduler: BaseScheduler
+
+        self.initializer = env.process(self.initializer_process(autoscaler, scheduler))
 
         self.end_event = end_event
         self.end_time: SimTime
@@ -312,23 +295,27 @@ class Orchestrator:
     def initialize_state(self) -> SystemState:
         pass
 
-    def initializer_process(self) -> Generator:
-        # Initialize shared data structures according to simulation policy
-        system_state: SystemState = self.initialize_state()
-        # Putting it all together...
-        yield self.mutex.put(system_state)
-
-        # Begin orchestration
-        self.gateway = self.env.process(self.gateway_process())
-        self.monitor = self.env.process(self.monitor_process())
-        self.autoscaler.run = self.env.process(self.autoscaler.autoscaler_process())
-        self.scheduler.run = self.env.process(self.scheduler.scheduler_process())
+    @abstractmethod
+    def initializer_process(
+        self, autoscaler: Type[BaseAutoscaler], scheduler: Type[BaseScheduler]
+    ) -> Generator:
+        # FIXME: There might be a semantically better no-op to use here
+        yield self.env.timeout(0)
 
     @abstractmethod
-    def monitor_process(self) -> Generator:
-        pass
+    def handle_workload_event(self, task: Task) -> Generator:
+        # FIXME: There might be a semantically better no-op to use here
+        yield self.env.timeout(0)
 
     def workflow_process(self, task: Task) -> Generator:
+        # Notify orchestrator of task arrival
+        yield self.env.process(self.handle_workload_event(task))
+        # Wait for current task execution
+        yield task.done
+        # Notify orchestrator of task completion
+        # TODO: Specify event type
+        # yield self.env.process(self.handle_workload_event(task))
+
         # Find next task in the application
         task_dag = task.application.type["dag"]
         sorter = TopologicalSorter(task_dag)
@@ -357,9 +344,6 @@ class Orchestrator:
                 task.application.tasks,
             )
         )
-
-        # Wait for current task execution
-        yield task.done
 
         # Dispatch next task
         yield next_task.dispatched.succeed()
@@ -403,13 +387,13 @@ class Orchestrator:
             first_task: Task = app.tasks[0]
             yield first_task.dispatched.succeed()
 
-            # Subsequent tasks in application DAG will be dispatched later
-            # workflow_process waits for task completion before dispatching next task
-            self.env.process(self.workflow_process(first_task))
-
             # Tasks are stored in a queue to be scheduled on execution platforms
             # See scheduler_process()
             yield self.scheduler.tasks.put(first_task)
+
+            # Subsequent tasks in application DAG will be dispatched later
+            # workflow_process waits for task completion before dispatching next task
+            self.env.process(self.workflow_process(first_task))
 
         # Simulation ends when:
         #  - all platforms are released

@@ -1,32 +1,16 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 import logging
 import math
-from typing import TYPE_CHECKING, Dict, Set, Tuple
+from typing import TYPE_CHECKING, Dict, Generator, Set, Tuple
 
 from src.policy.knative.model import KnativeSchedulerState, KnativeSystemState
 
 if TYPE_CHECKING:
     from src.placement.infrastructure import Node, Platform
 
-from src.placement.orchestrator import Orchestrator
+from src.placement.by_threshold.orchestrator import ThresholdOrchestrator
 
 
-class KnativeOrchestrator(Orchestrator):
+class KnativeOrchestrator(ThresholdOrchestrator):
     def initialize_state(self) -> KnativeSystemState:
         # Initialize scheduler state
         scheduler_state = KnativeSchedulerState(
@@ -58,7 +42,7 @@ class KnativeOrchestrator(Orchestrator):
 
         return system_state
 
-    def monitor_process(self):
+    def monitor_process(self) -> Generator:
         # TODO: State initialization and update methods should be made abstract
         # and moved to policy package
         logging.info(f"[ {self.env.now} ] Orchestrator Monitor started")
@@ -70,7 +54,7 @@ class KnativeOrchestrator(Orchestrator):
             # Step
             step = math.floor(self.env.now - latest_window_start) + 1
 
-            system_state: KnativeSystemState = yield self.mutex.get()
+            system_state: KnativeSystemState = self.state
             replicas: Dict[str, Set[Tuple[Node, Platform]]] = system_state.replicas
             state: KnativeSchedulerState = system_state.scheduler_state
 
@@ -103,8 +87,6 @@ class KnativeOrchestrator(Orchestrator):
                         state.average_contention[function_name][
                             (node.id, platform.id)
                         ] = value
-
-            yield self.mutex.put(system_state)
 
             # Wake Monitor up once per second
             yield self.env.timeout(1)

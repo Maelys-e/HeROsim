@@ -1,19 +1,3 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 import argparse
 import glob
 import json
@@ -41,6 +25,7 @@ from src.charts.charts import (
     plot_quantiles,
     get_charts_data,
     plot_cost_structure,
+    plot_time_series,
 )
 
 from src.parser.parser import parse_simulation_data
@@ -112,7 +97,7 @@ def main() -> int:
     simulation_data: SimulationData = parse_simulation_data(args.data_directory)
 
     # Plot time series
-    # time_series_file = plot_time_series(chart_dir, time_series)
+    time_series_file = plot_time_series(chart_dir, time_series)
 
     # Plot tasks
     # tasks_time_file = plot_tasks_time(chart_dir, simulation_data.task_types)

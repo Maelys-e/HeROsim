@@ -122,8 +122,8 @@ chart_files=$(
   python -m src.charts -p -i "${infrastructure_file}" -d "${data_directory}" -w "${workload_trace}"
 )
 
-# Save logs
-cp -r "log" "log_baselines"
+: '
+
 # Save results
 cp -r "result" "result_baselines"
 
@@ -186,8 +186,6 @@ python -m src.placement \
   -k "${keep_alive}" \
   -q "${queue_length}"
 
-# Save logs
-cp -r "log" "log_components"
 # Save results
 cp -r "result" "result_components"
 
@@ -195,6 +193,8 @@ cp -r "result" "result_components"
 chart_files=$(
   python -m src.charts -p -i "${infrastructure_file}" -d "${data_directory}" -w "${workload_trace}"
 )
+
+# '
 
 : '
 # Preview main chart file in VS Code

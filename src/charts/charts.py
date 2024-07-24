@@ -1,21 +1,6 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 import itertools
 import os
+import pprint
 import statistics
 
 from bisect import bisect
@@ -149,13 +134,13 @@ def get_charts_data(
                         last_value = storage_result[key][-1][1]
                         cur_storage_values[key] += last_value
 
-        # pprint.pprint(cur_storage_values)
+        pprint.pprint(cur_storage_values)
 
         cur_storage_means = {
             key: value / count for key, value in cur_storage_values.items()
         }
 
-        # pprint.pprint(cur_storage_means)
+        pprint.pprint(cur_storage_means)
 
         # Sort data by ascending energy consumption
         index = bisect(results["energyTotals"], cur_energy_total)
@@ -793,11 +778,22 @@ def plot_storage_distribution(
 def plot_time_series(chart_dir: str, time_series: TimeSeries) -> str:
     workload, workload_axis = plt.subplots()
 
-    workload_axis.plot([event["timestamp"] for event in time_series.events])
+    # x_data = list(range(1, len(time_series.events) + 1))
+    # y_data = [event["timestamp"] for event in time_series.events]
+
+    workload_axis.plot(
+        [event["timestamp"] for event in time_series.events],
+        linestyle="--",
+        marker="x",
+        color="blue",
+        markeredgecolor="red",
+        markerfacecolor="red",
+    )
+    # workload_axis.set_yticks(y_data)
 
     # workload_axis.legend()
-    workload_axis.set_ylabel("Request Arrival Time (s)", fontweight="bold")
-    workload_axis.set_xlabel("Request Number", fontweight="bold")
+    workload_axis.set_ylabel("Request Count", fontweight="bold")
+    workload_axis.set_xlabel("Request Arrival Time (s)", fontweight="bold")
 
     outfile = os.path.join(f"{chart_dir}", "time-series.png")
 

@@ -1,136 +1,44 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 from __future__ import annotations
 from abc import abstractmethod
 
 import logging
-import math
 
-from simpy.core import Environment, SimTime
+from simpy.core import Environment
 from simpy.events import Process
-from simpy.resources.store import Store
 
-from typing import Dict, Generator, List, Set, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Generator, List, Set, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.placement.infrastructure import Node, Platform
+    from src.placement.infrastructure import Node, Platform, Storage
 
 from src.placement.model import (
-    PlatformVector,
+    DurationSecond,
     ScaleEvent,
     SimulationData,
     SimulationPolicy,
+    SizeGigabyte,
+    SpeedMBps,
     SystemState,
     TaskType,
 )
 
 
-class Autoscaler:
+class BaseAutoscaler:
     def __init__(
         self,
         env: Environment,
-        mutex: Store,
+        system_state: SystemState,
         data: SimulationData,
         policy: SimulationPolicy,
     ):
         self.env = env
-        self.mutex = mutex
+        self.state = system_state
         self.data = data
         self.policy = policy
 
         self.scale_events: List[ScaleEvent] = []
 
         self.run: Process
-
-    def autoscaler_process(self):
-        logging.info(
-            f"[ {self.env.now} ] Orchestrator Autoscaler started with policy"
-            f" {self.policy}"
-        )
-
-        last_force_scale_up: Dict[str, SimTime] = {
-            function_name: 0.0 for function_name in self.data.task_types
-        }
-
-        while True:
-            # Per-function scaling decision
-            system_state: SystemState = yield self.mutex.get()
-            replicas: Dict[str, Set[Tuple[Node, Platform]]] = system_state.replicas
-
-            for function_name, function_replicas in replicas.items():
-                force_scale_up = True
-
-                scaling_difference: PlatformVector[float] = yield self.env.process(
-                    self.scaling_level(
-                        system_state, self.data.task_types[function_name]
-                    )
-                )
-
-                for hardware_target, hardware_scaling in scaling_difference.items():
-                    if hardware_scaling < 0:
-                        # Scale down
-                        count = abs(math.floor(hardware_scaling))
-                        # logging.error(f"[ {self.env.now} ] Scaling down {function_name} by {count} (currently {len(function_replicas)})")
-                        stop = yield self.env.process(
-                            self.scale_down(
-                                count, system_state, function_name, hardware_target
-                            )
-                        )
-                        # Do not force scale up
-                        force_scale_up = False
-
-                    elif hardware_scaling > 0:
-                        # Scale up
-                        count = abs(math.ceil(hardware_scaling))
-                        # logging.error(f"[ {self.env.now} ] Scaling up {function_name} by {count} (currently {len(function_replicas)})")
-                        stop = yield self.env.process(
-                            self.scale_up(
-                                count, system_state, function_name, hardware_target
-                            )
-                        )
-                        # Successfully scaled up on hardware target
-                        if not isinstance(stop, StopIteration):
-                            force_scale_up = False
-
-                    else:
-                        # Correct scaling level, do nothing
-                        force_scale_up = False
-                        # pass
-
-                # Force scale up on any hardware type if necessary
-                if force_scale_up and (
-                    (self.env.now - last_force_scale_up[function_name])
-                    > self.policy.keep_alive
-                ):
-                    stop = yield self.env.process(
-                        self.create_first_replica(
-                            system_state, self.data.task_types[function_name]
-                        )
-                    )
-                    last_force_scale_up[function_name] = self.env.now
-
-            # Release mutex
-            yield self.mutex.put(system_state)
-
-            # Next event
-            self.env.step()
-
-            # Wake Autoscaler up once per second
-            # yield self.env.timeout(1)
 
     def scale_up(
         self,
@@ -148,9 +56,9 @@ class Autoscaler:
             # Filter out nodes by task requirements
             couples_suitable: Set[Tuple[Node, Platform]] = set()
 
-            available_resources: Dict[Node, Set[Platform]] = (
-                system_state.available_resources
-            )
+            available_resources: Dict[
+                Node, Set[Platform]
+            ] = system_state.available_resources
             for node, platforms in available_resources.items():
                 for platform in platforms:
                     if (
@@ -216,7 +124,6 @@ class Autoscaler:
                 self.env.process(
                     self.initialize_replica(
                         new_replica,
-                        function_replicas,
                         self.data.task_types[function_name],
                         system_state,
                     )
@@ -232,7 +139,8 @@ class Autoscaler:
                     "count": len(function_replicas),
                     "average_queue_length": sum(
                         [len(replica[1].queue.items) for replica in function_replicas]
-                    ) / len(function_replicas),
+                    )
+                    / len(function_replicas),
                 }
                 self.scale_events.append(event)
             except KeyError:
@@ -311,9 +219,9 @@ class Autoscaler:
                 removed_replica[1].initialized = removed_replica[1].env.event()
 
                 # Release replica into available resources
-                available_resources: Dict[Node, Set[Platform]] = (
-                    system_state.available_resources
-                )
+                available_resources: Dict[
+                    Node, Set[Platform]
+                ] = system_state.available_resources
                 available_resources[removed_replica[0]].add(removed_replica[1])
 
                 # Update node availability
@@ -369,12 +277,6 @@ class Autoscaler:
                 pass
 
     @abstractmethod
-    def scaling_level(
-        self, system_state: SystemState, task_type: TaskType
-    ) -> Generator:
-        pass
-
-    @abstractmethod
     def create_first_replica(
         self, system_state: SystemState, task_type: TaskType
     ) -> Generator:
@@ -387,12 +289,96 @@ class Autoscaler:
         pass
 
     @abstractmethod
+    def is_cached(
+        self,
+        new_replica: Tuple[Node, Platform],
+        task_type: TaskType,
+    ) -> bool:
+        pass
+
+    def retrieve_function(
+        self,
+        new_replica: Tuple[Node, Platform],
+        task_type: TaskType,
+        system_state: SystemState,
+    ) -> Generator[Any, Any, float]:
+        node: Node = new_replica[0]
+        platform: Platform = new_replica[1]
+
+        # Check node cache for function image availability
+        is_cached: bool = self.is_cached(new_replica, task_type)
+
+        # Initialize image retrieval duration
+        retrieval_duration: DurationSecond = 0.0
+
+        # Retrieve image if function is not in node cache
+        if not is_cached:
+            logging.info(
+                f"[ {self.env.now} ] 💾 {node} needs to pull image for {task_type}"
+            )
+
+            # Update image retrieval duration
+            retrieval_size: SizeGigabyte = task_type["imageSize"][
+                platform.type["shortName"]
+            ]
+            # Depends on storage performance
+            # FIXME: What's the policy for storage selection?
+            node_storage: Storage
+            node_storage = yield node.storage.get(
+                lambda storage: not storage.type["remote"]
+            )
+            # Depends on network link speed
+            retrieval_speed: SpeedMBps = min(
+                node_storage.type["throughput"]["write"], node.network["bandwidth"]
+            )
+            retrieval_duration += (
+                retrieval_size / (retrieval_speed / 1024)
+                + node_storage.type["latency"]["write"]
+            )
+
+            # print(f"retrieval size = {retrieval_size}")
+            # print(f"retrieval speed = {retrieval_speed}")
+
+            # TODO: Update disk usage
+            stored = node_storage.store_function(platform.type["shortName"], task_type)
+
+            if not stored:
+                logging.error(
+                    f"[ {self.env.now} ] 💾 {node_storage} has no available capacity to"
+                    f" cache image for {self}"
+                )
+
+            # TODO: Post retrieval operations
+            yield self.env.process(
+                self.post_retrieve_function(
+                    new_replica, task_type, node_storage, system_state
+                )
+            )
+
+            # Release storage
+            yield node.storage.put(node_storage)
+
+        # print(f"retrieval duration = {retrieval_duration}")
+
+        return retrieval_duration
+
+    @abstractmethod
+    def post_retrieve_function(
+        self,
+        new_replica: Tuple[Node, Platform],
+        task_type: TaskType,
+        node_storage: Storage,
+        system_state: SystemState,
+    ) -> Generator:
+        # FIXME: There might be a semantically better no-op to use here
+        yield self.env.timeout(0)
+
+    @abstractmethod
     def initialize_replica(
         self,
         new_replica: Tuple[Node, Platform],
-        function_replicas: Set[Tuple[Node, Platform]],
         task_type: TaskType,
-        state: SystemState,
+        system_state: SystemState,
     ) -> Generator:
         pass
 

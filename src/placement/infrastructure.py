@@ -1,19 +1,3 @@
-"""
-Copyright 2024 b<>com
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -74,6 +58,15 @@ class Application:
 
     def __repr__(self):
         return f"Application {self.id} ({self.type['name']})"
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __lt__(self, other: Application):
+        return self.id < other.id
+
+    def __eq__(self, other: Application):
+        return self.id == other.id
 
     def result(self) -> ApplicationResult:
         # Application total time
@@ -190,6 +183,12 @@ class Task:
     def __repr__(self):
         return f"Task {self.id} ({self.type['name']})"
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __eq__(self, other: Task):
+        return self.id == other.id
+
     def __lt__(self, other: Task) -> bool:
         policies: Dict[str, Callable[[], bool]] = {
             # First In, First Out
@@ -256,6 +255,8 @@ class Task:
         self.initialization_time = self.started_time - self.arrived_time
         # Actual task compute time (seconds)
         self.compute_time = self.done_time - self.started_time
+
+        # TODO: Set penalty value
 
         # Assert invariant
         """
@@ -349,6 +350,15 @@ class Storage:
             f"Storage {self.id} ({self.type['name']} (@ {self.node})) --"
             f" {self.get_usage() * 100:.2f}%"
         )
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __lt__(self, other: Storage):
+        return self.id < other.id
+
+    def __eq__(self, other: Storage):
+        return self.id == other.id
 
     def result(self) -> StorageResult:
         return {
@@ -552,15 +562,17 @@ class Platform:
     def __repr__(self):
         return f"Platform {self.id} ({self.type['name']})"
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __lt__(self, other: Platform):
+        return self.id < other.id
+
+    def __eq__(self, other: Platform):
+        return self.id == other.id
+
     def result(self) -> PlatformResult:
         idle_time = self.env.now - self.load_time
-
-        """
-        print(
-            f"{self} local dependencies % = "
-            f"{(self.local_dependencies / self.tasks_count) * 100}"
-        )
-        """
 
         return {
             "platformId": self.id,
@@ -585,10 +597,13 @@ class Platform:
             task: Task = yield self.queue.get()
 
             # Statistics (Task)
+            # FIXME: Does not seem to consistently represent pull times
             task.cache_hit = after_initialize == before_initialize
             task.pull_time = (
                 after_initialize - before_initialize if not task.cache_hit else 0.0
             )
+
+            # logging.error(f"{task.id} {task.pull_time}")
 
             # Initialize the task
             yield task.arrived.succeed()
@@ -814,6 +829,15 @@ class Node:
 
     def __repr__(self):
         return f"Node {self.id}"
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __lt__(self, other: Node):
+        return self.id < other.id
+
+    def __eq__(self, other: Node):
+        return self.id == other.id
 
     def result(self) -> NodeResult:
         platform_results: List[PlatformResult] = [
